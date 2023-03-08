@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {tokenize, Tokens, TOKENS} from 'parsel-js';
+import {Token, tokenize, TokenType} from './PSelectorTokenizer.js';
 
 export type CSSSelector = string;
 export type PPseudoSelector = {
@@ -29,13 +29,8 @@ export type CompoundPSelector = Array<CSSSelector | PPseudoSelector>;
 export type ComplexPSelector = Array<CompoundPSelector | PCombinator>;
 export type ComplexPSelectorList = ComplexPSelector[];
 
-TOKENS['combinator'] = new RegExp(
-  `${/\s*(?:>{3,4})\s*|/.source}${TOKENS['combinator']!.source}`,
-  'g'
-);
-
 class TokenSpan {
-  #tokens: Tokens[] = [];
+  #tokens: Token[] = [];
   #selector: string;
 
   constructor(selector: string) {
@@ -46,13 +41,13 @@ class TokenSpan {
     return this.#tokens.length;
   }
 
-  add(token: Tokens) {
+  add(token: Token) {
     this.#tokens.push(token);
   }
 
   toStringAndClear() {
-    const startToken = this.#tokens[0] as Tokens;
-    const endToken = this.#tokens[this.#tokens.length - 1] as Tokens;
+    const startToken = this.#tokens[0] as Token;
+    const endToken = this.#tokens[this.#tokens.length - 1] as Token;
     this.#tokens.splice(0);
     return this.#selector.slice(startToken.pos[0], endToken.pos[1]);
   }
@@ -86,9 +81,9 @@ export function parsePSelectors(selector: string): ComplexPSelectorList {
   const storage = new TokenSpan(selector);
   for (const token of tokens) {
     switch (token.type) {
-      case 'combinator':
+      case TokenType.Combinator:
         switch (token.content) {
-          case '>>>':
+          case PCombinator.Descendent:
             if (storage.length) {
               compoundSelector.push(storage.toStringAndClear());
             }
@@ -96,7 +91,7 @@ export function parsePSelectors(selector: string): ComplexPSelectorList {
             complexSelector.push(PCombinator.Descendent);
             complexSelector.push(compoundSelector);
             continue;
-          case '>>>>':
+          case PCombinator.Child:
             if (storage.length) {
               compoundSelector.push(storage.toStringAndClear());
             }
@@ -106,7 +101,7 @@ export function parsePSelectors(selector: string): ComplexPSelectorList {
             continue;
         }
         break;
-      case 'pseudo-element':
+      case TokenType.PseudoElement:
         if (!token.name.startsWith('-p-')) {
           break;
         }
@@ -118,7 +113,7 @@ export function parsePSelectors(selector: string): ComplexPSelectorList {
           value: unquote(token.argument ?? ''),
         });
         continue;
-      case 'comma':
+      case TokenType.Comma:
         if (storage.length) {
           compoundSelector.push(storage.toStringAndClear());
         }
